@@ -1,0 +1,26 @@
+{
+  "name": "ct-txn-history",
+  "version": "1.0.0",
+  "description": "Script to save ethereum transaction history to a CSV",
+  "main": "main.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/pratts/ct-txn-history.git"
+  },
+  "keywords": [
+    "Ethereum",
+    "CSV"
+  ],
+  "author": "Prateek Sharma",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pratts/ct-txn-history/issues"
+  },
+  "homepage": "https://github.com/pratts/ct-txn-history#readme",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
