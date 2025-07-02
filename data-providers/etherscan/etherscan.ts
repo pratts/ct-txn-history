@@ -1,12 +1,13 @@
 import { DataProvider } from "../provider";
 import { Axios } from 'axios';
 import { EtherScanBaseTransactionDto, EtherScanBlockNumDto, EtherScanERC20TransferDto, EtherScanERC721TransferDto, EtherScanInternalTransactionDto, EtherScanNormalTransactionDto, EtherScanResponseDto } from "./etherscan.dto";
+import { TransactionRowDto } from "../../models/txn_csv_row.dto";
 
 export class EtherscanProvider implements DataProvider {
     private apiKey: string;
     private apiUrl: string;
     private axiosInstance: Axios;
-    private readonly OFFSET = 10;
+    private readonly OFFSET = 100;
 
     constructor(apiKey: string, apiUrl: string) {
         this.apiKey = apiKey;
@@ -17,6 +18,26 @@ export class EtherscanProvider implements DataProvider {
                 apikey: this.apiKey
             }
         })
+    }
+
+    private toEth(wei: BigInt) {
+        return (Number(wei) / 1e18).toString();
+    }
+
+    private calcGasFee(tx: EtherScanBaseTransactionDto, isInternal: boolean = false): string {
+        if (isInternal) {
+            // Internal transactions don't have their own gas fees
+            return '0';
+        }
+
+        if (!tx.gasUsed || !tx.gasPrice) return '0';
+        return this.toEth(BigInt(tx.gasUsed) * BigInt(tx.gasPrice));
+    }
+
+    private toValueAmount(tx: EtherScanERC20TransferDto | EtherScanERC721TransferDto): string {
+        if (!tx.value) return '';
+        const decimals = tx.tokenDecimal ? parseInt(tx.tokenDecimal) : 18;
+        return (Number(BigInt(tx.value)) / Math.pow(10, decimals)).toString();
     }
 
     public async getBlockNumberByTimestamp(date: Date, closest: string): Promise<string> {
@@ -36,7 +57,19 @@ export class EtherscanProvider implements DataProvider {
         return etherscanBlockDto.result;
     }
 
-    public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any> {
+    private deduplicateTransactions(transactions: TransactionRowDto[]): TransactionRowDto[] {
+        const seen = new Set<string>();
+        return transactions.filter(tx => {
+            const key = `${tx.transactionHash}-${tx.fromAddress}-${tx.toAddress}-${tx.assetContractAddress}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    }
+
+    public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]> {
         let [startBlock, endBlock] = ['0', 'latest']
         if (startDate != null && endDate != null) {
             [startBlock, endBlock] = await Promise.all([
@@ -45,23 +78,73 @@ export class EtherscanProvider implements DataProvider {
             ])
         }
 
-        console.log('startBlock:', startBlock, 'endBlock:', endBlock);
         // Fetch transactions in a paginated manner
-        const normalTransactions = await this.fetchNormalTransactions(address, startBlock, endBlock);
-        const internalTransactions = await this.fetchInternalTransactions(address, startBlock, endBlock);
-        const erc20Transfers = await this.fetchERC20Transfers(address, startBlock, endBlock);
-        const erc721Transfers = await this.fetchERC721Transfers(address, startBlock, endBlock);
+        const [normalTransactions, internalTransactions, erc20Transfers, erc721Transfers] = await Promise.all([
+            this.fetchNormalTransactions(address, startBlock, endBlock),
+            this.fetchInternalTransactions(address, startBlock, endBlock),
+            this.fetchERC20Transfers(address, startBlock, endBlock),
+            this.fetchERC721Transfers(address, startBlock, endBlock)
+        ]);
 
-        console.log('normalTransactions:', normalTransactions);
-        console.log('internalTransactions:', internalTransactions);
-        console.log('erc20Transfers:', erc20Transfers);
-        console.log('erc721Transfers:', erc721Transfers);
-        return {
-            normalTransactions,
-            // internalTransactions,
-            // erc20Transfers,
-            // erc721Transfers
-        };
+        console.log(`Fetched ${normalTransactions.length} normal transactions, ${internalTransactions.length} internal transactions, ${erc20Transfers.length} ERC-20 transfers, and ${erc721Transfers.length} ERC-721 transfers for address: ${address}`);
+        const transactions: TransactionRowDto[] = [];
+        normalTransactions.forEach((tx) => {
+            const row = new TransactionRowDto();
+            row.transactionHash = tx.hash;
+            row.dateTime = new Date(Number(tx.timeStamp) * 1000).toISOString();
+            row.fromAddress = tx.from;
+            row.toAddress = tx.to;
+            row.transactionType = 'ETH transfer';
+            row.assetContractAddress = '';
+            row.assetSymbol = 'ETH';
+            row.tokenId = '';
+            row.valueAmount = this.toEth(BigInt(tx.value));
+            row.gasFeeEth = this.calcGasFee(tx);
+            transactions.push(row);
+        });
+        internalTransactions.forEach((tx) => {
+            const row = new TransactionRowDto();
+            row.transactionHash = tx.hash;
+            row.dateTime = new Date(Number(tx.timeStamp) * 1000).toISOString();
+            row.fromAddress = tx.from;
+            row.toAddress = tx.to;
+            row.transactionType = 'Internal transaction';
+            row.assetContractAddress = tx.contractAddress;
+            row.assetSymbol = 'ETH';
+            row.tokenId = '';
+            row.valueAmount = this.toEth(BigInt(tx.value));
+            row.gasFeeEth = this.calcGasFee(tx, true);
+            transactions.push(row);
+        });
+        erc20Transfers.forEach((tx) => {
+            const row = new TransactionRowDto();
+            row.transactionHash = tx.hash;
+            row.dateTime = new Date(Number(tx.timeStamp) * 1000).toISOString();
+            row.fromAddress = tx.from;
+            row.toAddress = tx.to;
+            row.transactionType = 'ERC-20 transfer';
+            row.assetContractAddress = tx.contractAddress;
+            row.assetSymbol = tx.tokenSymbol;
+            row.tokenId = '';
+            row.valueAmount = this.toValueAmount(tx);
+            row.gasFeeEth = this.calcGasFee(tx);
+            transactions.push(row);
+        });
+        erc721Transfers.forEach((tx) => {
+            const row = new TransactionRowDto();
+            row.transactionHash = tx.hash;
+            row.dateTime = new Date(Number(tx.timeStamp) * 1000).toISOString();
+            row.fromAddress = tx.from;
+            row.toAddress = tx.to;
+            row.transactionType = 'ERC-721 transfer';
+            row.assetContractAddress = tx.contractAddress;
+            row.assetSymbol = tx.tokenName;
+            row.tokenId = tx.tokenID;
+            row.valueAmount = this.toValueAmount(tx); // For NFTs, the value is typically 1
+            row.gasFeeEth = this.calcGasFee(tx);
+            transactions.push(row);
+        });
+        return this.deduplicateTransactions(transactions);
     }
 
     private async paginatedFetch<T extends EtherScanBaseTransactionDto>(address: string, startBlock: string, endBlock: string, action: string): Promise<T[]> {
@@ -78,7 +161,7 @@ export class EtherscanProvider implements DataProvider {
                     module: 'account',
                     action,
                     address,
-                    startblock: +startBlock,
+                    startblock: +lastBlock - 1,
                     endblock: endBlock,
                     page,
                     offset: this.OFFSET,
@@ -94,7 +177,7 @@ export class EtherscanProvider implements DataProvider {
             }
 
             results.push(...response.result);
-            lastBlock = +response.result[response.result.length - 1].blockNumber - 1;
+            lastBlock = +response.result[response.result.length - 1].blockNumber;
 
             if (response.result.length < this.OFFSET) {
                 break;
@@ -142,4 +225,5 @@ export class EtherscanProvider implements DataProvider {
     public async fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<EtherScanERC721TransferDto[]> {
         return await this.paginatedFetch(address, startBlock, endBlock, 'tokennfttx');
     }
+
 }

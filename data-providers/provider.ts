@@ -1,15 +1,11 @@
 import { ConfigDto } from "../models/config.dto";
+import { TransactionRowDto } from "../models/txn_csv_row.dto";
 import { AlchemyDataProvider } from "./alchemy/alchemy";
 import { EtherscanProvider } from "./etherscan/etherscan";
 
 export interface DataProvider {
     getBlockNumberByTimestamp(date: Date, closest: string): Promise<string>;
-    fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<any>;
-    fetchInternalTransactions(address: string, startBlock: string, endBlock: string): Promise<any>;
-    fetchERC20Transfers(address: string, startBlock: string, endBlock: string): Promise<any>;
-    fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<any>;
-
-    fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any>;
+    fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]>;
 }
 
 export class DataProviderFactory {
