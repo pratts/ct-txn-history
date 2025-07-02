@@ -65,7 +65,7 @@ npm run test
 - Run one of the scripts:
 ```bash
 npm run start <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
-npm run start-stream <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
+npm run start-stream <ETH_ADDRESS> [FROM_DATE] [TO_DATE] #To run with streaming support
 ```
 - Example: `npm run start 0x123456789012345678901234567890123456789012345678 2022-01-01 2022-12-31`
 - The script will fetch the transaction history for the given address and date range, and export it to a CSV file in the `output` folder with name `${address}_transactions.csv` file.
