@@ -1,5 +1,5 @@
-import { EtherscanProvider } from '../../data-providers/etherscan/etherscan';
-import { CSVExporter } from '../../utils/csv-exporter';
+import { EtherscanProvider } from '../../src/data-providers/etherscan/etherscan';
+import { CSVExporter } from '../../src/utils/csv-exporter';
 
 describe('Full Workflow Integration', () => {
     // These tests require a real API key and should be run sparingly

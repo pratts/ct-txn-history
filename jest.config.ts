@@ -8,7 +8,9 @@ module.exports = {
         '**/?(*.)+(spec|test).ts'
     ],
     transform: {
-        '^.+\\.ts$': 'ts-jest'
+        '^.+\\.ts$': ['ts-jest', {
+            useESM: false
+        }]
     },
     collectCoverageFrom: [
         'src/**/*.ts',
@@ -17,12 +19,5 @@ module.exports = {
     ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
-    moduleFileExtensions: ['ts', 'js', 'json', 'node'],
-    // Add this to handle ES modules if needed
-    extensionsToTreatAsEsm: ['.ts'],
-    globals: {
-        'ts-jest': {
-            useESM: false
-        }
-    }
+    moduleFileExtensions: ['ts', 'js', 'json', 'node']
 };
