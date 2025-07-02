@@ -3,11 +3,13 @@ import { AlchemyDataProvider } from "./alchemy/alchemy";
 import { EtherscanProvider } from "./etherscan/etherscan";
 
 export interface DataProvider {
-    getBlockNumberByTimestamp(fromDate: string): Promise<string>;
+    getBlockNumberByTimestamp(date: Date, closest: string): Promise<string>;
     fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<any>;
     fetchInternalTransactions(address: string, startBlock: string, endBlock: string): Promise<any>;
     fetchERC20Transfers(address: string, startBlock: string, endBlock: string): Promise<any>;
     fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<any>;
+
+    fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any>;
 }
 
 export class DataProviderFactory {

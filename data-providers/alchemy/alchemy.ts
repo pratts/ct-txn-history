@@ -7,7 +7,11 @@ export class AlchemyDataProvider implements DataProvider {
         this.apiKey = apiKey;
     }
 
-    public async getBlockNumberByTimestamp(fromDate: string): Promise<string> {
+    public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any> {
+        throw new Error("Method not implemented.");
+    }
+
+    public async getBlockNumberByTimestamp(date: Date, closest: string): Promise<string> {
         return null;
     }
     public async fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<any> {

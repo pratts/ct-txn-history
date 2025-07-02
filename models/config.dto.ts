@@ -1,4 +1,3 @@
-require('dotenv').config();
 export class ConfigDto {
     node_env: string;
     dataProvider: string;
@@ -26,7 +25,7 @@ export class ConfigDto {
 }
 
 export function loadConfig(): ConfigDto {
-    console.log('process.env.NODE_ENV:', process.env);
+    require('dotenv').config();
     const config: ConfigDto = new ConfigDto();
     config.node_env = process.env.NODE_ENV || 'development';
     config.dataProvider = process.env.DATA_PROVIDER || 'etherscan';
