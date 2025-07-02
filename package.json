@@ -4,8 +4,8 @@
   "description": "Script to save ethereum transaction history to a CSV",
   "main": "main.ts",
   "scripts": {
-    "start": "npx ts-node ./src/main.ts",
-    "start-stream": "npx ts-node ./src/main-stream.ts",
+    "start": "npx ts-node src/main.ts",
+    "start-stream": "npx ts-node src/main-stream.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

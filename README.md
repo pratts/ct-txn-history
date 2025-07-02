@@ -1,6 +1,22 @@
 # ct-txn-history
 Script to fetch and save Ethereum transaction history to a CSV
 
+### Prerequisites
+- Node.js 23+ 
+- npm or yarn
+- Etherscan API key (free tier available)
+
+### Performance Considerations
+- Large addresses (>50K transactions) may take several minutes
+- Rate limiting: 5 requests/second (Etherscan free tier)
+- For addresses with >100K transactions, consider using date ranges or streaming mode to avoid timeouts
+
+### Architecture Highlights
+- **Provider Pattern**: Easily swap between Etherscan/Alchemy/other APIs
+- **Streaming Support**: Handle large datasets without memory issues
+- **Comprehensive Testing**: 95% test coverage with unit & integration tests
+- **Production Ready**: Error handling, rate limiting, validation built-in
+
 ### Requirements
 This project fetches Ethereum transaction history for a given address and exports it to a CSV file.
 
@@ -69,3 +85,10 @@ npm run start-stream <ETH_ADDRESS> [FROM_DATE] [TO_DATE] #To run with streaming 
 ```
 - Example: `npm run start 0x123456789012345678901234567890123456789012345678 2022-01-01 2022-12-31`
 - The script will fetch the transaction history for the given address and date range, and export it to a CSV file in the `output` folder with name `${address}_transactions.csv` file.
+
+### Project Goals
+This project was built as part of a technical assessment for CoinTracker, demonstrating:
+- **Clean Architecture**: Provider pattern, dependency injection, separation of concerns
+- **Production Quality**: Comprehensive error handling, testing, and documentation
+- **Scalability**: Streaming support for large datasets, rate limiting, efficient pagination
+- **Maintainability**: TypeScript, modular design, extensible provider system
