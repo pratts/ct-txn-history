@@ -1,3 +1,4 @@
+import { TransactionRowDto } from "../../models/txn_csv_row.dto";
 import { DataProvider } from "../provider";
 
 export class AlchemyDataProvider implements DataProvider {
@@ -5,6 +6,9 @@ export class AlchemyDataProvider implements DataProvider {
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
+    }
+    fetchEthTransactionsStream(address: string, startDate?: Date, endDate?: Date): AsyncGenerator<TransactionRowDto, void, unknown> {
+        throw new Error("Method not implemented.");
     }
 
     public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any> {

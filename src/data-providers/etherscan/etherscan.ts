@@ -226,4 +226,88 @@ export class EtherscanProvider implements DataProvider {
         return await this.paginatedFetch(address, startBlock, endBlock, 'tokennfttx');
     }
 
+    async *fetchEthTransactionsStream(
+        address: string,
+        startDate?: Date,
+        endDate?: Date
+    ): AsyncGenerator<TransactionRowDto, void, unknown> {
+        let [startBlock, endBlock] = ['0', 'latest'];
+
+        if (startDate && endDate) {
+            [startBlock, endBlock] = await Promise.all([
+                this.getBlockNumberByTimestamp(startDate, 'after'),
+                this.getBlockNumberByTimestamp(endDate, 'before')
+            ]);
+        }
+
+        console.log(`🔄 Starting streaming fetch for address: ${address}`);
+
+        // Fetch each transaction type and yield results as they come
+        const transactionTypes = [
+            { method: 'fetchNormalTransactions', type: 'ETH transfer' },
+            { method: 'fetchInternalTransactions', type: 'Internal transaction' },
+            { method: 'fetchERC20Transfers', type: 'ERC-20 transfer' },
+            { method: 'fetchERC721Transfers', type: 'ERC-721 transfer' }
+        ];
+
+        for (const txType of transactionTypes) {
+            console.log(`📡 Fetching ${txType.type} transactions...`);
+
+            // Use the existing paginated fetch but yield results as they're processed
+            const transactions = await (this[txType.method as keyof this] as Function).call(this, address, startBlock, endBlock) as any[];
+
+            for (const tx of transactions) {
+                const row = this.transformToTransactionRow(tx, txType.type);
+                yield row;
+            }
+        }
+    }
+
+    /**
+     * Helper method to transform raw transaction to TransactionRowDto
+     */
+    private transformToTransactionRow(tx: any, transactionType: string): TransactionRowDto {
+        const row = new TransactionRowDto();
+        row.transactionHash = tx.hash;
+        row.dateTime = new Date(Number(tx.timeStamp) * 1000).toISOString();
+        row.fromAddress = tx.from;
+        row.toAddress = tx.to;
+        row.transactionType = transactionType;
+
+        switch (transactionType) {
+            case 'ETH transfer':
+                row.assetContractAddress = '';
+                row.assetSymbol = 'ETH';
+                row.tokenId = '';
+                row.valueAmount = this.toEth(BigInt(tx.value));
+                row.gasFeeEth = this.calcGasFee(tx);
+                break;
+
+            case 'Internal transaction':
+                row.assetContractAddress = tx.contractAddress;
+                row.assetSymbol = 'ETH';
+                row.tokenId = '';
+                row.valueAmount = this.toEth(BigInt(tx.value));
+                row.gasFeeEth = this.calcGasFee(tx, true);
+                break;
+
+            case 'ERC-20 transfer':
+                row.assetContractAddress = tx.contractAddress;
+                row.assetSymbol = tx.tokenSymbol;
+                row.tokenId = '';
+                row.valueAmount = this.toValueAmount(tx);
+                row.gasFeeEth = this.calcGasFee(tx);
+                break;
+
+            case 'ERC-721 transfer':
+                row.assetContractAddress = tx.contractAddress;
+                row.assetSymbol = tx.tokenName;
+                row.tokenId = tx.tokenID;
+                row.valueAmount = this.toValueAmount(tx);
+                row.gasFeeEth = this.calcGasFee(tx);
+                break;
+        }
+
+        return row;
+    }
 }

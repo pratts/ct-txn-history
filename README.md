@@ -39,6 +39,9 @@ This project fetches Ethereum transaction history for a given address and export
 - The script uses `dotenv` to load environment variables from a `.env` file, which contains API keys and other configuration details.
 - Each data provider can implement logics to fetch various transaction types (normal, internal, token transfers) as per the provider's API capabilities and requirements.
 - The script exports csv to an output folder.
+- There are 2 scripts:
+    - `main.ts` - For fetching transactions and exporting to CSV in a single run.
+    - `main-stream.ts` - For streaming transactions and exporting to CSV in a single run. This is useful for large datasets where you want to process transactions as they come in without waiting for the entire dataset to be fetched.
 
 ### Assumptions
 - The script assumes that the user has necessary API keys to Etherscan. Implementation for Alchemy is not in progress.
@@ -59,9 +62,10 @@ This project fetches Ethereum transaction history for a given address and export
 ```bash
 npm run test
 ```
-- Run the script using 
+- Run one of the scripts:
 ```bash
-npm run start -- <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
+npm run start <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
+npm run start-stream <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
 ```
-    - Example: `npm run start 0x123456789012345678901234567890123456789012345678 2022-01-01 2022-12-31`
+- Example: `npm run start 0x123456789012345678901234567890123456789012345678 2022-01-01 2022-12-31`
 - The script will fetch the transaction history for the given address and date range, and export it to a CSV file in the `output` folder with name `${address}_transactions.csv` file.

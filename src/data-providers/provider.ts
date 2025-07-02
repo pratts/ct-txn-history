@@ -5,6 +5,7 @@ import { EtherscanProvider } from "./etherscan/etherscan";
 
 export interface DataProvider {
     fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]>;
+    fetchEthTransactionsStream(address: string, startDate?: Date, endDate?: Date): AsyncGenerator<TransactionRowDto, void, unknown>
 }
 
 export class DataProviderFactory {
