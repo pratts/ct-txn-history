@@ -55,6 +55,13 @@ This project fetches Ethereum transaction history for a given address and export
 - Clone the repository
 - Install dependencies using `npm install`
 - Rename the `.env.example` file to `.env` and provide the necessary API keys.
-- Run the script using `npm run start -- <ETH_ADDRESS> [FROM_DATE] [TO_DATE]`
+- To run the tests, use 
+```bash
+npm run test
+```
+- Run the script using 
+```bash
+npm run start -- <ETH_ADDRESS> [FROM_DATE] [TO_DATE]
+```
     - Example: `npm run start 0x123456789012345678901234567890123456789012345678 2022-01-01 2022-12-31`
 - The script will fetch the transaction history for the given address and date range, and export it to a CSV file in the `output` folder with name `${address}_transactions.csv` file.
