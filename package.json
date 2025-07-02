@@ -4,6 +4,7 @@
   "description": "Script to save ethereum transaction history to a CSV",
   "main": "main.ts",
   "scripts": {
+    "start": "npx ts-node main.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

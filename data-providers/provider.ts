@@ -4,7 +4,6 @@ import { AlchemyDataProvider } from "./alchemy/alchemy";
 import { EtherscanProvider } from "./etherscan/etherscan";
 
 export interface DataProvider {
-    getBlockNumberByTimestamp(date: Date, closest: string): Promise<string>;
     fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]>;
 }
 
