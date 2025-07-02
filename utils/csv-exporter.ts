@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { TransactionRowDto } from '../models/txn_csv_row.dto';
+import * as path from 'path';
 
 export class CSVExporter {
     private readonly CSV_HEADERS = [
@@ -57,6 +58,12 @@ export class CSVExporter {
      */
     async exportToCSV(transactions: TransactionRowDto[], filename: string): Promise<void> {
         try {
+            const outputDir = path.join(process.cwd(), 'output');
+
+            // Create output directory if it doesn't exist
+            await fs.promises.mkdir(outputDir, { recursive: true });
+            const filePath = path.join(outputDir, filename);
+
             // Create CSV content
             const csvLines: string[] = [];
 
@@ -70,9 +77,9 @@ export class CSVExporter {
 
             // Write to file
             const csvContent = csvLines.join('\n');
-            await fs.promises.writeFile(filename, csvContent, 'utf8');
+            await fs.promises.writeFile(filePath, csvContent, 'utf8');
 
-            console.log(`✅ Successfully exported ${transactions.length} transactions to ${filename}`);
+            console.log(`✅ Successfully exported ${transactions.length} transactions to ${filePath}`);
 
         } catch (error) {
             console.error('❌ Error exporting CSV:', error);
