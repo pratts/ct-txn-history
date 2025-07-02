@@ -12,13 +12,26 @@ const address = args[0];
 let fromDate: Date = null;
 let toDate: Date = null;
 
-if (!args[1]) {
-    fromDate = new Date();
-    fromDate.setFullYear(fromDate.getFullYear() - 1); // Default to one year ago
+if (args[1]) {
+    fromDate = new Date(args[1]);
+    if (isNaN(fromDate.getTime())) {
+        console.error('Invalid fromDate format. Please use a valid date format.');
+        process.exit(1);
+    }
 }
 
-if (!args[2]) {
-    toDate = new Date();
+if (args[2]) {
+    toDate = new Date(args[2]);
+
+    if (isNaN(toDate.getTime())) {
+        console.error('Invalid toDate format. Please use a valid date format.');
+        process.exit(1);
+    }
+
+    if (toDate.getTime() < (fromDate ? fromDate.getTime() : 0)) {
+        console.error('toDate cannot be earlier than fromDate.');
+        process.exit(1);
+    }
 }
 
 (async () => {
