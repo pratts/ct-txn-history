@@ -244,22 +244,127 @@ export class EtherscanProvider implements DataProvider {
 
         // Fetch each transaction type and yield results as they come
         const transactionTypes = [
-            { method: 'fetchNormalTransactions', type: 'ETH transfer' },
-            { method: 'fetchInternalTransactions', type: 'Internal transaction' },
-            { method: 'fetchERC20Transfers', type: 'ERC-20 transfer' },
-            { method: 'fetchERC721Transfers', type: 'ERC-721 transfer' }
+            { method: 'fetchNormalTransactionsStream', type: 'ETH transfer' },
+            { method: 'fetchInternalTransactionsStream', type: 'Internal transaction' },
+            { method: 'fetchERC20TransfersStream', type: 'ERC-20 transfer' },
+            { method: 'fetchERC721TransfersStream', type: 'ERC-721 transfer' }
         ];
 
         for (const txType of transactionTypes) {
             console.log(`📡 Fetching ${txType.type} transactions...`);
 
             // Use the existing paginated fetch but yield results as they're processed
-            const transactions = await (this[txType.method as keyof this] as Function).call(this, address, startBlock, endBlock) as any[];
+            yield* (this[txType.method as keyof this] as Function).call(this, address, startBlock, endBlock) as any[];
+        }
+    }
 
-            for (const tx of transactions) {
-                const row = this.transformToTransactionRow(tx, txType.type);
-                yield row;
+    public async *paginatedFetchStream<T extends EtherScanBaseTransactionDto>(
+        address: string,
+        startBlock: string,
+        endBlock: string,
+        action: string
+    ): AsyncGenerator<T, void, unknown> {
+        let page = 1;
+        let lastBlock = +startBlock;
+        const RATE_LIMIT_DELAY = 200;
+
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+            const txns = await this.axiosInstance.get('/v2/api', {
+                params: {
+                    chainid: 1,
+                    module: 'account',
+                    action,
+                    address,
+                    startblock: +lastBlock - 1,
+                    endblock: endBlock,
+                    page,
+                    offset: this.OFFSET,
+                    sort: 'asc'
+                }
+            });
+            if (txns.status !== 200 || !txns.data) {
+                break; // No more transactions or an error occurred
             }
+            const response = JSON.parse(txns.data) as EtherScanResponseDto<T>;
+            if (response.status !== '1' || !response.result || response.result.length === 0) {
+                break; // No more transactions or an error occurred
+            }
+
+            lastBlock = +response.result[response.result.length - 1].blockNumber;
+
+            for (const tx of response.result) {
+                yield tx;
+            }
+
+            if (response.result.length < this.OFFSET) {
+                break;
+            }
+            page++;
+        }
+    }
+
+    /**
+     * 
+     * @param address 
+     * @param startBlock 
+     * @param endBlock
+     * @returns AsyncGenerator<TransactionRowDto, void, unknown>
+     * This method fetches normal transactions in a paginated manner and yields each transaction as a TransactionRowDto.
+     * It uses the paginatedFetchStream method to handle the API calls and yield results. 
+     */
+    public async *fetchNormalTransactionsStream(address: string, startBlock: string, endBlock: string): AsyncGenerator<TransactionRowDto, void, unknown> {
+        for await (const tx of this.paginatedFetchStream<EtherScanNormalTransactionDto>(address, startBlock, endBlock, 'txlist')) {
+            yield this.transformToTransactionRow(tx, 'ETH transfer');
+        }
+    }
+
+    /**
+     * 
+     * @param address 
+     * @param startBlock 
+     * @param endBlock
+     * @returns AsyncGenerator<TransactionRowDto, void, unknown>
+     * 
+     * This method fetches internal transactions in a paginated manner and yields each transaction as a TransactionRowDto.
+     * It uses the paginatedFetchStream method to handle the API calls and yield results. 
+     */
+    public async *fetchInternalTransactionsStream(address: string, startBlock: string, endBlock: string): AsyncGenerator<TransactionRowDto, void, unknown> {
+        // Fetch internal transactions in a paginated manner
+        for await (const tx of this.paginatedFetchStream<EtherScanNormalTransactionDto>(address, startBlock, endBlock, 'txlistinternal')) {
+            yield this.transformToTransactionRow(tx, 'Internal transaction');
+        }
+    }
+
+    /**
+     * 
+     * @param address 
+     * @param startBlock 
+     * @param endBlock 
+     * @returns AsyncGenerator<TransactionRowDto, void, unknown>
+     * 
+     * This method fetches ERC-20 transfers in a paginated manner and yields each transaction as a TransactionRowDto.
+     * It uses the paginatedFetchStream method to handle the API calls and yield results.
+     */
+    public async *fetchERC20TransfersStream(address: string, startBlock: string, endBlock: string): AsyncGenerator<TransactionRowDto, void, unknown> {
+        for await (const tx of this.paginatedFetchStream<EtherScanNormalTransactionDto>(address, startBlock, endBlock, 'tokentx')) {
+            yield this.transformToTransactionRow(tx, 'ERC-20 transfer');
+        }
+    }
+
+    /**
+     * 
+     * @param address 
+     * @param startBlock 
+     * @param endBlock 
+     * @returns AsyncGenerator<TransactionRowDto, void, unknown>
+     * 
+     * This method fetches ERC-721 transfers in a paginated manner and yields each transaction as a TransactionRowDto.
+     * It uses the paginatedFetchStream method to handle the API calls and yield results.
+     */
+    public async *fetchERC721TransfersStream(address: string, startBlock: string, endBlock: string): AsyncGenerator<TransactionRowDto, void, unknown> {
+        for await (const tx of this.paginatedFetchStream<EtherScanNormalTransactionDto>(address, startBlock, endBlock, 'tokennfttx')) {
+            yield this.transformToTransactionRow(tx, 'ERC-721 transfer');
         }
     }
 
