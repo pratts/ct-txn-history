@@ -1,4 +1,4 @@
-import { Alchemy, AssetTransfersCategory, AssetTransfersResult, Network, SortingOrder } from "alchemy-sdk";
+import { Alchemy, AssetTransfersCategory, AssetTransfersParams, AssetTransfersResponse, AssetTransfersWithMetadataResult, Network, SortingOrder } from "alchemy-sdk";
 import { TransactionRowDto } from "../../models/txn_csv_row.dto";
 import { DataProvider } from "../provider";
 import axios, { AxiosInstance } from 'axios';
@@ -36,27 +36,56 @@ export class AlchemyDataProvider implements DataProvider {
         throw new Error("Method not implemented.");
     }
 
-    public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<any> {
+    public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]> {
         let [startBlock, endBlock] = ['0', 'latest']
         if (startDate != null && endDate != null) {
             [startBlock, endBlock] = await Promise.all([
                 this.getBlockNumberByTimestamp(startDate, 'after'),
                 this.getBlockNumberByTimestamp(endDate, 'before')
             ])
+        } else {
+            endBlock = await this.getLatestBlock();
         }
 
+        console.log(`Fetching transactions for address: ${address}, from block: ${startBlock}, to block: ${endBlock}`);
         const [normalTransactions, internalTransactions, erc20Transfers, erc721Transfers] = await Promise.all([
             this.fetchNormalTransactions(address, startBlock, endBlock),
             this.fetchInternalTransactions(address, startBlock, endBlock),
             this.fetchERC20Transfers(address, startBlock, endBlock),
             this.fetchERC721Transfers(address, startBlock, endBlock)
         ]);
-        console.log('normalTransactions: ', normalTransactions);
-        console.log('internalTransactions: ', internalTransactions);
-        console.log('erc20Transfers: ', erc20Transfers);
-        console.log('erc721Transfers: ', erc721Transfers);
+        console.log('normalTransactions: ', normalTransactions.length);
+        console.log('internalTransactions: ', internalTransactions.length);
+        console.log('erc20Transfers: ', erc20Transfers.length);
+        console.log('erc721Transfers: ', erc721Transfers.length);
 
-        throw new Error("Method not implemented.");
+        const transactions: TransactionRowDto[] = [];
+        const allTransactions = [...normalTransactions, ...internalTransactions, ...erc20Transfers, ...erc721Transfers];
+        for (const txn of allTransactions) {
+            const transaction: TransactionRowDto = {
+                transactionHash: txn.hash,
+                dateTime: new Date(txn.metadata.blockTimestamp).toISOString(),
+                fromAddress: txn.from,
+                toAddress: txn.to || '',
+                transactionType: txn.category,
+                assetContractAddress: txn.asset || '',
+                assetSymbol: '', // This can be populated if needed
+                tokenId: txn.erc721TokenId || txn.tokenId || '',
+                valueAmount: txn.value ? txn.value.toString() : '0',
+                gasFeeEth: '', // Gas fee can be calculated if needed
+            };
+            transactions.push(transaction);
+        }
+
+        return transactions;
+    }
+
+    private async getLatestBlock(): Promise<string> {
+        const block = await this.alchemy.core.getBlockNumber();
+        if (!block) {
+            throw new Error('Failed to fetch latest block number');
+        }
+        return block.toString();
     }
 
     public async getBlockNumberByTimestamp(date: Date, closest: string): Promise<string> {
@@ -79,53 +108,78 @@ export class AlchemyDataProvider implements DataProvider {
         }
     }
 
-    private async paginatedFetch<T extends any>(address: string, startBlock: string, endBlock: string, action: AssetTransfersCategory): Promise<T[]> {
-        console.log(`Fetching ${action} transactions for address: ${address}, from block: ${startBlock}, to block: ${endBlock}, hex start block: ${toBeHex(startBlock)}, hex end block: ${toBeHex(endBlock)}`);
-        let page = 1;
+    private async paginatedFetch<T extends any>(fromAddress: string, toAddress: string, startBlock: string, endBlock: string, action: AssetTransfersCategory): Promise<AssetTransfersWithMetadataResult[]> {
+        console.log(`Fetching ${action} transactions for fromAddress: ${fromAddress}, toAddress: ${toAddress}, from block: ${startBlock}, to block: ${endBlock}, hex start block: ${toBeHex(startBlock)}, hex end block: ${toBeHex(endBlock)}`);
+        let page = '0x0';
         let lastBlock = +startBlock;
-        const results: T[] = [];
+        const results: AssetTransfersWithMetadataResult[] = [];
         const RATE_LIMIT_DELAY = 200;
 
         while (true) {
             await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
-            const response = await this.alchemy.core.getAssetTransfers({
-                fromAddress: address,
-                fromBlock: toBeHex(lastBlock - 1),
+            const params = {
+                fromBlock: toBeHex(lastBlock),
                 toBlock: toBeHex(endBlock),
                 category: [action],
                 order: SortingOrder.ASCENDING,
-                // pageKey: `${page}`,
-                maxCount: this.OFFSET
-            })
-            console.log('Fetched page: ', page, ' for action: ', action, ' response: ', response);
+                maxCount: this.OFFSET,
+                withMetadata: true,
+                excludeZeroValue: false
+            } as AssetTransfersParams;
+            if (page !== '0x0') {
+                params.pageKey = page;
+            }
+            if (fromAddress) {
+                params.fromAddress = fromAddress;
+            }
+            if (toAddress) {
+                params.toAddress = toAddress;
+            }
+            const response = await this.alchemy.core.getAssetTransfers(params);
             if (!response || !response.transfers || response.transfers.length === 0) {
                 break;
             }
 
-            results.push(...response.transfers as T[]);
-            lastBlock = getNumber(response.transfers[response.transfers.length - 1].blockNum)
+            results.push(...response.transfers as AssetTransfersWithMetadataResult[]);
+            lastBlock = getNumber(response.transfers[response.transfers.length - 1].blockNum) - 1;
 
             if (response.transfers.length < this.OFFSET) {
                 break;
             }
-            page++;
+            page = response.pageKey || '0x0';
         }
         return results;
     }
 
-    public async fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<any> {
-        return this.paginatedFetch<AssetTransfersResult>(address, startBlock, endBlock, AssetTransfersCategory.EXTERNAL);
+    public async fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
+        const [inTxn, outTxn] = await Promise.all([
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.EXTERNAL),
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.EXTERNAL),
+        ]);
+        return [...inTxn, ...outTxn];
     }
 
-    public async fetchInternalTransactions(address: string, startBlock: string, endBlock: string): Promise<any> {
-        return await this.paginatedFetch<AssetTransfersResult>(address, startBlock, endBlock, AssetTransfersCategory.INTERNAL);
+    public async fetchInternalTransactions(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
+        const [inTxn, outTxn] = await Promise.all([
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.INTERNAL),
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.INTERNAL),
+        ]);
+        return [...inTxn, ...outTxn];
     }
 
-    public async fetchERC20Transfers(address: string, startBlock: string, endBlock: string): Promise<any> {
-        return this.paginatedFetch<AssetTransfersResult>(address, startBlock, endBlock, AssetTransfersCategory.ERC20);
+    public async fetchERC20Transfers(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
+        const [inTxn, outTxn] = await Promise.all([
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.ERC20),
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.ERC20),
+        ]);
+        return [...inTxn, ...outTxn];
     }
 
-    public async fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<any> {
-        return this.paginatedFetch<AssetTransfersResult>(address, startBlock, endBlock, AssetTransfersCategory.ERC721);
+    public async fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
+        const [inTxn, outTxn] = await Promise.all([
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.ERC721),
+            this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.ERC721),
+        ]);
+        return [...inTxn, ...outTxn];
     }
 }

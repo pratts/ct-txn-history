@@ -90,7 +90,7 @@ if ((args[1] && !args[2]) || (!args[1] && args[2])) {
         await csvExporter.exportToCSVWithValidation(transactions, `${address}_transactions.csv`)
         console.log(`✅ Successfully exported ${transactions.length} transactions to ${address}_transactions.csv`);
     } catch (error) {
-        console.error('Error processing address transactions:', error.message);
+        console.error('Error processing address transactions:', error);
         process.exit(1);
     }
 })();
