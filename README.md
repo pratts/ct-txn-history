@@ -15,7 +15,7 @@ This project fetches comprehensive Ethereum transaction history for any address 
 - ✅ **Complete Transaction Coverage**: ETH transfers, ERC-20 tokens, ERC-721 NFTs, internal transactions
 - ✅ **Flexible Date Filtering**: Fetch specific time ranges or complete history
 - ✅ **Streaming Support**: Handle large datasets (100K+ transactions) efficiently
-- ✅ **Multiple Data Providers**: Pluggable architecture (Etherscan implemented, Alchemy ready)
+- ✅ **Multiple Data Providers**: Pluggable architecture (Etherscan and Alchemy implemented)
 - ✅ **Production Ready**: Comprehensive error handling, rate limiting, validation
 - ✅ **High Test Coverage**: 95% test coverage with unit & integration tests
 
@@ -106,7 +106,7 @@ ETHERSCAN_API_URL=https://api.etherscan.io
 # Optional: Data Provider Selection
 DATA_PROVIDER=etherscan
 
-# Future: Alchemy Configuration (not implemented)
+# Future: Alchemy Configuration
 # ALCHEMY_API_KEY=your_alchemy_api_key_here
 ```
 
@@ -173,7 +173,7 @@ interface DataProvider {
 
 ## 🔮 Future Enhancements
 
-- [ ] **Alchemy Provider**: Complete Alchemy API implementation
+- [x] **Alchemy Provider**: Complete Alchemy API implementation
 - [ ] **ERC-1155 Support**: Multi-token standard support
 - [ ] **Multi-Address Batch**: Process multiple addresses in one run
 - [ ] **Advanced DeFi Parsing**: Uniswap, Compound, Aave transaction details
