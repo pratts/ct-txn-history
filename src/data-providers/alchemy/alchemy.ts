@@ -54,8 +54,46 @@ export class AlchemyDataProvider implements DataProvider {
         return gasFeeInEth;
     }
 
-    fetchEthTransactionsStream(address: string, startDate?: Date, endDate?: Date): AsyncGenerator<TransactionRowDto, void, unknown> {
-        throw new Error("Method not implemented.");
+    public async *fetchEthTransactionsStream(address: string, startDate?: Date, endDate?: Date): AsyncGenerator<TransactionRowDto, void, unknown> {
+        let [startBlock, endBlock] = ['0', 'latest']
+        if (startDate != null && endDate != null) {
+            [startBlock, endBlock] = await Promise.all([
+                this.getBlockNumberByTimestamp(startDate, 'after'),
+                this.getBlockNumberByTimestamp(endDate, 'before')
+            ])
+        } else {
+            endBlock = await this.getLatestBlock();
+        }
+
+        for await (const txn of this.paginatedFetchStream<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, [AssetTransfersCategory.EXTERNAL, AssetTransfersCategory.INTERNAL, AssetTransfersCategory.ERC20, AssetTransfersCategory.ERC721])) {
+            yield {
+                transactionHash: txn.hash,
+                dateTime: new Date(txn.metadata.blockTimestamp).toISOString(),
+                fromAddress: txn.from,
+                toAddress: txn.to || '',
+                transactionType: (txn.category === 'external' ? 'ETH transfer' : (txn.category === 'erc20' ? 'ERC-20 transfer' : (txn.category === 'erc721' ? 'ERC-721 transfer' : 'Internal transaction'))),
+                assetContractAddress: txn.rawContract.address || '',
+                assetSymbol: (txn.category === 'external' ? 'ETH' : (txn.category == 'erc20' ? txn.asset : '')), // This can be populated if needed
+                tokenId: txn.erc721TokenId || txn.tokenId || '',
+                valueAmount: txn.value ? txn.value.toString() : '0',
+                gasFeeEth: ''//this.calcGasFee(txnInfo, txn.category === 'internal'),
+            };
+        }
+
+        for await (const txn of this.paginatedFetchStream<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, [AssetTransfersCategory.EXTERNAL, AssetTransfersCategory.INTERNAL, AssetTransfersCategory.ERC20, AssetTransfersCategory.ERC721])) {
+            yield {
+                transactionHash: txn.hash,
+                dateTime: new Date(txn.metadata.blockTimestamp).toISOString(),
+                fromAddress: txn.from,
+                toAddress: txn.to || '',
+                transactionType: (txn.category === 'external' ? 'ETH transfer' : (txn.category === 'erc20' ? 'ERC-20 transfer' : (txn.category === 'erc721' ? 'ERC-721 transfer' : 'Internal transaction'))),
+                assetContractAddress: txn.rawContract.address || '',
+                assetSymbol: (txn.category === 'external' ? 'ETH' : (txn.category == 'erc20' ? txn.asset : '')), // This can be populated if needed
+                tokenId: txn.erc721TokenId || txn.tokenId || '',
+                valueAmount: txn.value ? txn.value.toString() : '0',
+                gasFeeEth: ''//this.calcGasFee(txnInfo, txn.category === 'internal'),
+            };
+        }
     }
 
     public async fetchEthTransactions(address: string, startDate: Date, endDate: Date): Promise<TransactionRowDto[]> {
@@ -78,11 +116,11 @@ export class AlchemyDataProvider implements DataProvider {
         const transactions: TransactionRowDto[] = [];
         const allTransactions = [...inTxn, ...outTxn];
         for await (const txn of allTransactions) {
-            const txnInfo = await this.alchemy.core.getTransactionReceipt(txn.hash);
-            if (!txnInfo) {
-                console.warn(`Transaction not found for hash: ${txn.hash}`);
-                continue;
-            }
+            // const txnInfo = await this.alchemy.core.getTransactionReceipt(txn.hash);
+            // if (!txnInfo) {
+            //     console.warn(`Transaction not found for hash: ${txn.hash}`);
+            //     continue;
+            // }
             const transaction: TransactionRowDto = {
                 transactionHash: txn.hash,
                 dateTime: new Date(txn.metadata.blockTimestamp).toISOString(),
@@ -93,7 +131,7 @@ export class AlchemyDataProvider implements DataProvider {
                 assetSymbol: (txn.category === 'external' ? 'ETH' : (txn.category == 'erc20' ? txn.asset : '')), // This can be populated if needed
                 tokenId: txn.erc721TokenId || txn.tokenId || '',
                 valueAmount: txn.value ? txn.value.toString() : '0',
-                gasFeeEth: this.calcGasFee(txnInfo, txn.category === 'internal'),
+                gasFeeEth: ''//this.calcGasFee(txnInfo, txn.category === 'internal'),
             };
             transactions.push(transaction);
         }
@@ -168,5 +206,45 @@ export class AlchemyDataProvider implements DataProvider {
             page = response.pageKey || '0x0';
         }
         return results;
+    }
+
+    private async *paginatedFetchStream<AssetTransfersWithMetadataResult>(fromAddress: string, toAddress: string, startBlock: string, endBlock: string, actions: AssetTransfersCategory[]): AsyncGenerator<AssetTransfersWithMetadataResult, void, unknown> {
+        console.log(`Fetching ${actions} transactions for fromAddress: ${fromAddress}, toAddress: ${toAddress}, from block: ${startBlock}, to block: ${endBlock}, hex start block: ${toBeHex(startBlock)}, hex end block: ${toBeHex(endBlock)}`);
+        let page = '0x0';
+        const RATE_LIMIT_DELAY = 200;
+
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
+            const params = {
+                fromBlock: toBeHex(startBlock),
+                toBlock: toBeHex(endBlock),
+                category: actions,
+                order: SortingOrder.ASCENDING,
+                maxCount: this.OFFSET,
+                withMetadata: true,
+                excludeZeroValue: false
+            } as AssetTransfersParams;
+            if (page !== '0x0') {
+                params.pageKey = page;
+            }
+            if (fromAddress) {
+                params.fromAddress = fromAddress;
+            }
+            if (toAddress) {
+                params.toAddress = toAddress;
+            }
+            const response = await this.alchemy.core.getAssetTransfers(params);
+            if (!response || !response.transfers || response.transfers.length === 0) {
+                break;
+            }
+            for (const tx of response.transfers as AssetTransfersWithMetadataResult[]) {
+                yield tx;
+            }
+
+            if (response.transfers.length < this.OFFSET) {
+                break;
+            }
+            page = response.pageKey || '0x0';
+        }
     }
 }

@@ -250,7 +250,7 @@ export class EtherscanProvider implements DataProvider {
             { method: 'fetchERC721TransfersStream', type: 'ERC-721 transfer' }
         ];
 
-        for (const txType of transactionTypes) {
+        for await (const txType of transactionTypes) {
             console.log(`📡 Fetching ${txType.type} transactions...`);
 
             // Use the existing paginated fetch but yield results as they're processed
