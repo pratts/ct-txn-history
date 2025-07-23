@@ -9,7 +9,7 @@ export class AlchemyDataProvider implements DataProvider {
     private apiKey: string;
     private alchemy: Alchemy;
     private axiosInstance: AxiosInstance;
-    private readonly OFFSET = 100;
+    private readonly OFFSET = 1000;
 
     constructor(apiKey: string) {
         this.apiKey = apiKey;
@@ -129,17 +129,16 @@ export class AlchemyDataProvider implements DataProvider {
         }
     }
 
-    private async paginatedFetch<T extends any>(fromAddress: string, toAddress: string, startBlock: string, endBlock: string, actions: AssetTransfersCategory[]): Promise<AssetTransfersWithMetadataResult[]> {
+    private async paginatedFetch<AssetTransfersWithMetadataResult>(fromAddress: string, toAddress: string, startBlock: string, endBlock: string, actions: AssetTransfersCategory[]): Promise<AssetTransfersWithMetadataResult[]> {
         console.log(`Fetching ${actions} transactions for fromAddress: ${fromAddress}, toAddress: ${toAddress}, from block: ${startBlock}, to block: ${endBlock}, hex start block: ${toBeHex(startBlock)}, hex end block: ${toBeHex(endBlock)}`);
         let page = '0x0';
-        let lastBlock = +startBlock;
         const results: AssetTransfersWithMetadataResult[] = [];
         const RATE_LIMIT_DELAY = 200;
 
         while (true) {
             await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY));
             const params = {
-                fromBlock: toBeHex(lastBlock),
+                fromBlock: toBeHex(startBlock),
                 toBlock: toBeHex(endBlock),
                 category: actions,
                 order: SortingOrder.ASCENDING,
@@ -162,7 +161,6 @@ export class AlchemyDataProvider implements DataProvider {
             }
 
             results.push(...response.transfers as AssetTransfersWithMetadataResult[]);
-            lastBlock = getNumber(response.transfers[response.transfers.length - 1].blockNum) - 1;
 
             if (response.transfers.length < this.OFFSET) {
                 break;
@@ -171,36 +169,4 @@ export class AlchemyDataProvider implements DataProvider {
         }
         return results;
     }
-
-    // public async fetchNormalTransactions(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
-    //     const [inTxn, outTxn] = await Promise.all([
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.EXTERNAL),
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.EXTERNAL),
-    //     ]);
-    //     return [...inTxn, ...outTxn];
-    // }
-
-    // public async fetchInternalTransactions(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
-    //     const [inTxn, outTxn] = await Promise.all([
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.INTERNAL),
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.INTERNAL),
-    //     ]);
-    //     return [...inTxn, ...outTxn];
-    // }
-
-    // public async fetchERC20Transfers(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
-    //     const [inTxn, outTxn] = await Promise.all([
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.ERC20),
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.ERC20),
-    //     ]);
-    //     return [...inTxn, ...outTxn];
-    // }
-
-    // public async fetchERC721Transfers(address: string, startBlock: string, endBlock: string): Promise<AssetTransfersWithMetadataResult[]> {
-    //     const [inTxn, outTxn] = await Promise.all([
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(null, address, startBlock, endBlock, AssetTransfersCategory.ERC721),
-    //         this.paginatedFetch<AssetTransfersWithMetadataResult>(address, null, startBlock, endBlock, AssetTransfersCategory.ERC721),
-    //     ]);
-    //     return [...inTxn, ...outTxn];
-    // }
 }
